@@ -132,6 +132,8 @@ async function handleGenerate(msg: Extract<UIMessage, { type: 'GENERATE' }>) {
 
     // Set text + variant properties
     try {
+      // setPropertiesAsync is not exposed in the installed @figma/plugin-typings version;
+      // setProperties (synchronous) is used instead.
       instance.setProperties({
         headline: config.headline,
         subheadline: config.subheadline,
@@ -183,21 +185,26 @@ async function handleGenerate(msg: Extract<UIMessage, { type: 'GENERATE' }>) {
 figma.showUI(__html__, { width: 360, height: 560 })
 
 figma.ui.onmessage = async (raw: UIMessage) => {
-  switch (raw.type) {
-    case 'GET_INDUSTRIES':
-      handleGetIndustries()
-      break
-    case 'LOAD_SCHEMES':
-      await handleLoadSchemes()
-      break
-    case 'SAVE_SCHEME':
-      await handleSaveScheme(raw.name, raw.data)
-      break
-    case 'GENERATE':
-      await handleGenerate(raw)
-      break
-    default:
-      console.error('Timemark Batch: unknown message type:', (raw as { type: string }).type)
-      break
+  try {
+    switch (raw.type) {
+      case 'GET_INDUSTRIES':
+        handleGetIndustries()
+        break
+      case 'LOAD_SCHEMES':
+        await handleLoadSchemes()
+        break
+      case 'SAVE_SCHEME':
+        await handleSaveScheme(raw.name, raw.data)
+        break
+      case 'GENERATE':
+        await handleGenerate(raw)
+        break
+      default:
+        console.error('Timemark Batch: unknown message type:', (raw as { type: string }).type)
+        break
+    }
+  } catch (e) {
+    const err: MainMessage = { type: 'ERROR', message: `插件内部错误: ${(e as Error).message}` }
+    figma.ui.postMessage(err)
   }
 }
