@@ -1,15 +1,3 @@
-import { loadFontsAsync, once, showUI } from '@create-figma-plugin/utilities'
-
-import { InsertCodeHandler } from './types'
-
-export default function () {
-  once<InsertCodeHandler>('INSERT_CODE', async function (code: string) {
-    const text = figma.createText()
-    await loadFontsAsync([text])
-    text.characters = code
-    figma.currentPage.selection = [text]
-    figma.viewport.scrollAndZoomIntoView([text])
-    figma.closePlugin()
-  })
-  showUI({ height: 232, width: 320 })
-}
+// src/main.ts — stub, will be replaced in Task 3
+figma.showUI(__html__, { width: 360, height: 560 })
+figma.ui.onmessage = async (_msg: unknown) => {}
