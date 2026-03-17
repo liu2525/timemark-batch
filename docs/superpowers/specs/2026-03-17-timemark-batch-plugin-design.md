@@ -224,7 +224,7 @@ Timemark 是一款户外工作相机 App。需要为 10 个国家批量制作广
 
 3. 若 photoBytes → figma.createImage(photoBytes).hash → photoHash
 
-4. 计算起始 X（当前视口中心附近），Y 固定
+4. 计算排列原点：`startX = figma.viewport.center.x - (totalWidth / 2)`，`startY = figma.viewport.center.y - (instanceHeight / 2)`，totalWidth = N × (instanceWidth + 40) - 40
 
 5. for each config in configs（勾选的国家）：
    a. component.createInstance()
@@ -273,7 +273,7 @@ interface PluginSettings {
 
 **行为：**
 - 插件开启时发送 `LOAD_SCHEMES`，自动填充 lastScheme 的表格
-- 「保存方案」弹出原生 `prompt()` 输入名称后保存
+- 「保存方案」在顶栏内联显示一个 input + 确认按钮（**不使用 `window.prompt()`**，Figma 插件沙箱中 `window.prompt` 不可靠）
 - 切换方案时更新表格和行业背景选择器
 - 拍照示例图**不保存**进方案（每次手动选或 AI 生成）
 - API Key 和 Prompt 预设存在独立的 `plugin_settings` key
@@ -288,6 +288,9 @@ interface PluginSettings {
 | 选中的不是 ComponentNode | ERROR：「请选中 Main Component，而非 Instance 或其他图层」 |
 | `__bg_library__` Frame 不存在 | ERROR：「未找到背景图库，请确认 Figma 文件中有名为 `__bg_library__` 的 Frame」 |
 | `setProperties` 报错（watermark 值不存在等） | 跳过该国家，加入 warnings，生成结束后统一提示 |
+| 行业存在于选择器但 `__bg_library__` 中无对应 Rectangle | warning（非 fatal），该国家 bg 图层不替换，继续生成其他国家 |
+| AI 生成弹窗：✕ 关闭时有飞行中的 fetch | UI 层 `AbortController` 取消请求，弹窗直接关闭，缩略图保持上一次状态 |
+| 未提供示例照片（photoBytes 为空） | `mockup/photo` 图层保持 Main Component 的原始 fill，不做任何替换 |
 | `bg` / `mockup/photo` 图层找不到 | 跳过该图层，加入 warnings，不中断整体生成 |
 | OpenAI API 返回错误 | UI 层 catch，显示错误信息（如 quota 超限、key 无效等） |
 
