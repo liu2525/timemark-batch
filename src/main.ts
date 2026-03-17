@@ -1,5 +1,5 @@
 // src/main.ts
-import { UIMessage, MainMessage, CountryConfig } from './types'
+import { UIMessage, MainMessage, CountryConfig, SchemeData, SchemesStore } from './types'
 
 // ─── Utility: recursive node finder ──────────────────────────────
 function findNodeByName(root: BaseNode, name: string): BaseNode | null {
@@ -16,6 +16,7 @@ function findNodeByName(root: BaseNode, name: string): BaseNode | null {
 // ─── Utility: find __bg_library__ frame on any page ──────────────
 function findBgLibrary(): FrameNode | null {
   for (const page of figma.root.children) {
+    if (page.type !== 'PAGE') continue
     for (const node of page.children) {
       if (node.name === '__bg_library__' && node.type === 'FRAME') {
         return node as FrameNode
@@ -37,18 +38,23 @@ function handleGetIndustries() {
 
 // ─── Handler: LOAD_SCHEMES ───────────────────────────────────────
 async function handleLoadSchemes() {
-  const raw = await figma.clientStorage.getAsync('schemes_store')
-  const data = raw ?? { schemes: {}, lastScheme: '' }
-  const msg: MainMessage = { type: 'SCHEMES', data, lastScheme: data.lastScheme ?? '' }
+  const raw = await figma.clientStorage.getAsync('schemes_store') as SchemesStore | undefined
+  const data: SchemesStore = (raw && typeof raw.schemes === 'object')
+    ? raw
+    : { schemes: {}, lastScheme: '' }
+  const msg: MainMessage = { type: 'SCHEMES', data, lastScheme: data.lastScheme }
   figma.ui.postMessage(msg)
 }
 
 // ─── Handler: SAVE_SCHEME ────────────────────────────────────────
-async function handleSaveScheme(name: string, schemeData: { industry: string; countries: CountryConfig[] }) {
-  const raw = await figma.clientStorage.getAsync('schemes_store') ?? { schemes: {}, lastScheme: '' }
-  raw.schemes[name] = schemeData
-  raw.lastScheme = name
-  await figma.clientStorage.setAsync('schemes_store', raw)
+async function handleSaveScheme(name: string, schemeData: SchemeData) {
+  const existing = await figma.clientStorage.getAsync('schemes_store') as SchemesStore | undefined
+  const store: SchemesStore = (existing && typeof existing.schemes === 'object')
+    ? existing
+    : { schemes: {}, lastScheme: '' }
+  store.schemes[name] = schemeData
+  store.lastScheme = name
+  await figma.clientStorage.setAsync('schemes_store', store)
 }
 
 // ─── Handler: GENERATE ───────────────────────────────────────────
@@ -105,11 +111,8 @@ async function handleGenerate(msg: Extract<UIMessage, { type: 'GENERATE' }>) {
 
   // Step 4: calculate layout origin
   const N = configs.length
-  // Create first instance temporarily to measure size
-  const probe = component.createInstance()
-  const instanceW = probe.width
-  const instanceH = probe.height
-  probe.remove()
+  const instanceW = component.width
+  const instanceH = component.height
 
   const totalWidth = N * instanceW + (N - 1) * 40
   const startX = figma.viewport.center.x - totalWidth / 2
@@ -192,6 +195,9 @@ figma.ui.onmessage = async (raw: UIMessage) => {
       break
     case 'GENERATE':
       await handleGenerate(raw)
+      break
+    default:
+      console.error('Timemark Batch: unknown message type:', (raw as { type: string }).type)
       break
   }
 }
