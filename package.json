@@ -12,7 +12,7 @@
     "typescript": ">=5"
   },
   "scripts": {
-    "build": "build-figma-plugin --typecheck --minify",
+    "build": "build-figma-plugin --typecheck --minify && node scripts/postbuild.mjs",
     "watch": "build-figma-plugin --typecheck --watch"
   },
   "figma-plugin": {
