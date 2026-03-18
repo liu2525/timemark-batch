@@ -570,4 +570,6 @@ function App() {
   )
 }
 
-render(<App />, document.getElementById('create-figma-plugin') ?? document.body)
+export default function(rootNode: Element | null) {
+  render(<App />, rootNode ?? document.body)
+}
