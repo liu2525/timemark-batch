@@ -27,8 +27,6 @@
       "allowedDomains": [
         "https://api.openai.com"
       ]
-    },
-    "width": 360,
-    "height": 560
+    }
   }
 }
