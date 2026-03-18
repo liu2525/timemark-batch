@@ -414,7 +414,7 @@ function App() {
           {showSaveInput ? (
             <Fragment>
               <input
-                autofocus
+                autoFocus
                 value={schemeName}
                 onInput={(e: Event) => setSchemeName((e.target as HTMLInputElement).value)}
                 onKeyDown={(e: KeyboardEvent) => { if (e.key === 'Enter') handleSaveScheme(); if (e.key === 'Escape') setShowSaveInput(false) }}
