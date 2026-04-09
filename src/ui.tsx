@@ -107,24 +107,17 @@ function AIModal({ target, selectedIndustry, promptPresets, apiKey, geminiKey, o
       } else {
         const trimmedKey = geminiKey.trim()
         if (!trimmedKey) { setError('请先在设置中填写 Gemini API Key'); setLoading(false); return }
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${trimmedKey}`, {
+        const aspectRatio = size === '1792x1024' ? '16:9' : size === '1024x1792' ? '9:16' : '1:1'
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': trimmedKey },
           signal: abortRef.current.signal,
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: finalPrompt }] }],
-            generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
-          }),
+          body: JSON.stringify({ instances: [{ prompt: finalPrompt }], parameters: { aspectRatio, sampleCount: 1 } }),
         })
         const json = await res.json()
         if (!res.ok) throw new Error(json.error?.message ?? `HTTP ${res.status}`)
-        // Response uses snake_case: inline_data (not inlineData)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const parts: any[] = json.candidates?.[0]?.content?.parts ?? []
-        const imgPart = parts.find((p: any) => p.inline_data?.data || p.inlineData?.data)
-        const imgData = imgPart?.inline_data ?? imgPart?.inlineData
-        if (!imgData?.data) throw new Error('Gemini 未返回图片数据')
-        const binary = atob(imgData.data)
+        const b64: string = json.predictions[0].bytesBase64Encoded
+        const binary = atob(b64)
         const arr = new Uint8Array(binary.length)
         for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i)
         bytes = Array.from(arr)
@@ -163,7 +156,7 @@ function AIModal({ target, selectedIndustry, promptPresets, apiKey, geminiKey, o
           {/* Provider toggle */}
           <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
             <button style={tabStyle(imageProvider === 'openai')} onClick={() => setImageProvider('openai')}>OpenAI DALL-E 3</button>
-            <button style={tabStyle(imageProvider === 'gemini')} onClick={() => setImageProvider('gemini')}>Gemini 2.5 Flash</button>
+            <button style={tabStyle(imageProvider === 'gemini')} onClick={() => setImageProvider('gemini')}>Gemini Imagen 4</button>
           </div>
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
