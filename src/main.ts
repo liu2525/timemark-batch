@@ -116,16 +116,22 @@ function findFirstTextNode(root: BaseNode): TextNode | null {
 }
 
 // ─── Utility: find node by path key relative to root ─────────────
+// Uses depth-first search so duplicate-named siblings (e.g. multiple
+// "Option Item" instances) are all tried before giving up.
 function findNodeByPathKey(root: BaseNode, pathKey: string): BaseNode | null {
   const segments = pathKey.split('|')
-  let current: BaseNode = root
-  for (const seg of segments) {
-    if (!('children' in current)) return null
-    const child = (current as ChildrenMixin).children.find(c => c.name === seg)
-    if (!child) return null
-    current = child
+  function search(node: BaseNode, depth: number): BaseNode | null {
+    if (depth === segments.length) return node
+    if (!('children' in node)) return null
+    for (const child of (node as ChildrenMixin).children) {
+      if (child.name === segments[depth]) {
+        const result = search(child, depth + 1)
+        if (result) return result
+      }
+    }
+    return null
   }
-  return current
+  return search(root, 0)
 }
 
 // ─── Handler: SCAN_TEXTS ─────────────────────────────────────────
