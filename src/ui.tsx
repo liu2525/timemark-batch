@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'preact/hooks'
 import {
   CountryConfig, DEFAULT_COUNTRIES, LANG_MAP, MS_LANG_MAP, DEEPL_LANG_MAP,
   SchemesStore, SchemeData, PluginSettings, TranslateProvider, DEFAULT_SETTINGS,
-  MockupTextNode, WatermarkConfig, DEFAULT_WATERMARK_CONFIG, LOCALE_MAP,
+  WatermarkConfig, DEFAULT_WATERMARK_CONFIG, LOCALE_MAP,
   UIMessage, MainMessage, HighlightRange, HighlightFill
 } from './types'
 
@@ -372,8 +372,6 @@ function App() {
 
   const [generating, setGenerating] = useState(false)
   const [batchTranslating, setBatchTranslating] = useState(false)
-  const [mockupLayerName, setMockupLayerName] = useState('mockup')
-  const [mockupScanResult, setMockupScanResult] = useState<string | null>(null)
   const [wmConfig, setWmConfig] = useState<WatermarkConfig>(DEFAULT_WATERMARK_CONFIG)
   const [excludeLayerInput, setExcludeLayerInput] = useState('logo')
   const [nameSuffix, setNameSuffix] = useState('Msg')
@@ -382,8 +380,6 @@ function App() {
 
   const bgFileRef = useRef<HTMLInputElement>(null)
   const photoFileRef = useRef<HTMLInputElement>(null)
-  const scanResolveRef = useRef<((texts: MockupTextNode[]) => void) | null>(null)
-  const scanRejectRef = useRef<((err: Error) => void) | null>(null)
   const batchScanResolveRef = useRef<((texts: { pathKey: string; content: string }[]) => void) | null>(null)
   const batchScanRejectRef = useRef<((err: Error) => void) | null>(null)
   const hlStyleResolveRef = useRef<((style: { text: string; highlightRanges: HighlightRange[]; dominantFills: HighlightFill[]; pathKey: string }) => void) | null>(null)
@@ -408,13 +404,6 @@ function App() {
           setSchemes(msg.data)
           if (msg.lastScheme && msg.data.schemes[msg.lastScheme]) {
             applyScheme(msg.data.schemes[msg.lastScheme])
-          }
-          break
-        case 'COMPONENT_TEXTS':
-          if (scanResolveRef.current) {
-            scanResolveRef.current(msg.texts)
-            scanResolveRef.current = null
-            scanRejectRef.current = null
           }
           break
         case 'ALL_COMPONENT_TEXTS':
@@ -444,10 +433,6 @@ function App() {
           setProgress(null)
           setResultMsg(`错误：${msg.message}`)
           setBatchTranslating(false)
-          if (scanRejectRef.current) {
-            scanRejectRef.current(new Error(msg.message))
-            scanResolveRef.current = null; scanRejectRef.current = null
-          }
           if (batchScanRejectRef.current) {
             batchScanRejectRef.current(new Error(msg.message))
             batchScanResolveRef.current = null; batchScanRejectRef.current = null
@@ -520,35 +505,7 @@ function App() {
     setShowSettings(false)
   }
 
-  function parseMockupLayerNames(): string[] {
-    return mockupLayerName.split(',').map(s => s.trim()).filter(Boolean)
-  }
-
-  async function scanMockupTexts(): Promise<MockupTextNode[]> {
-    return new Promise<MockupTextNode[]>((resolve, reject) => {
-      scanResolveRef.current = resolve
-      scanRejectRef.current = reject
-      setTimeout(() => {
-        scanResolveRef.current = null
-        scanRejectRef.current = null
-        reject(new Error('扫描超时，请确认已选中 Main Component'))
-      }, 6000)
-      send({ type: 'SCAN_TEXTS', mockupLayerNames: parseMockupLayerNames() })
-    })
-  }
-
-  async function handleScanPreview() {
-    if (!mockupLayerName.trim()) return
-    setMockupScanResult('扫描中…')
-    try {
-      const texts = await scanMockupTexts()
-      setMockupScanResult(texts.length > 0 ? `✓ 找到 ${texts.length} 个文字节点` : '⚠ 未找到文字节点，请检查图层名')
-    } catch (e: unknown) {
-      setMockupScanResult(`✗ ${(e as Error).message}`)
-    }
-  }
-
-  // ── Headline-style reader (promise-based, mirrors scanMockupTexts) ─
+  // ── Headline-style reader ─────────────────────────────────────────
   async function readHeadlineStyle(): Promise<{ text: string; highlightRanges: HighlightRange[]; dominantFills: HighlightFill[]; pathKey: string }> {
     return new Promise((resolve, reject) => {
       hlStyleResolveRef.current = resolve
@@ -685,30 +642,6 @@ function App() {
     setGenerating(true)
     setResultMsg(null)
 
-    let mockupTranslations: { code: string; texts: MockupTextNode[] }[] | undefined
-
-    if (parseMockupLayerNames().length > 0) {
-      try {
-        const texts = await scanMockupTexts()
-        if (texts.length > 0) {
-          mockupTranslations = []
-          const nonUS = enabled.filter(c => c.code !== 'US')
-          for (const c of nonUS) {
-            const translated: MockupTextNode[] = []
-            for (const t of texts) {
-              const content = await translateOneText(t.content, c.code)
-              translated.push({ layerName: t.layerName, pathKey: t.pathKey, content })
-            }
-            mockupTranslations.push({ code: c.code, texts: translated })
-          }
-        }
-      } catch (e: unknown) {
-        setResultMsg(`Mockup 翻译失败: ${(e as Error).message}`)
-        setGenerating(false)
-        return
-      }
-    }
-
     // Pre-compute watermark strings in UI (Intl is available here, not in Figma sandbox)
     let watermarkTexts: Record<string, { dateStr: string; weekdayStr: string }> | undefined
     let weekdayNames: string[] | undefined
@@ -744,7 +677,6 @@ function App() {
       ...(bgImageHash ? { bgImageHash } : {}),
       ...(bgBytes ? { bgBytes } : {}),
       ...(photoBytes ? { photoBytes } : {}),
-      ...(mockupTranslations ? { mockupTranslations } : {}),
       ...(wmConfig.watermarkLayerName.trim() ? { watermarkConfig: wmConfig } : {}),
       ...(watermarkTexts ? { watermarkTexts } : {}),
       ...(weekdayNames ? { weekdayNames } : {}),
@@ -963,23 +895,6 @@ function App() {
             <button style={S.btnAI} onClick={() => setShowAI('photo')}>✦ AI</button>
           </div>
         </div>
-      </div>
-
-      {/* Mockup translate bar */}
-      <div style={{ padding: '0 9px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
-        <span style={{ color: C.muted, fontSize: 7.5, flexShrink: 0 }}>Mockup 图层:</span>
-        <input
-          style={{ ...S.input, flex: 1 }}
-          value={mockupLayerName}
-          onInput={(e: Event) => { setMockupLayerName((e.target as HTMLInputElement).value); setMockupScanResult(null) }}
-          placeholder="图层名，多个用逗号分隔"
-        />
-        <button style={{ ...S.btnSecondary, fontSize: 7.5, padding: '2px 6px', flexShrink: 0 }} onClick={handleScanPreview}>扫描</button>
-        {mockupScanResult && (
-          <span style={{ fontSize: 7.5, color: mockupScanResult.startsWith('✓') ? C.green : C.red, flexShrink: 0 }}>
-            {mockupScanResult}
-          </span>
-        )}
       </div>
 
       {/* Watermark bar */}

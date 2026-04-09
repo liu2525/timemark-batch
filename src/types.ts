@@ -48,12 +48,6 @@ export interface PluginSettings {
   promptPresets: Record<string, string>
 }
 
-export interface MockupTextNode {
-  layerName: string // which mockup layer this node belongs to
-  pathKey: string   // '|'-separated path relative to that layer, e.g. "screen|welcome_text"
-  content: string   // original English text
-}
-
 // ── Messages: UI → main ──────────────────────────────────────────
 export type UIMessage =
   | { type: 'GET_INDUSTRIES' }
@@ -61,7 +55,6 @@ export type UIMessage =
   | { type: 'READ_HEADLINE_STYLE' }   // ask main to scan headline node fills
   | { type: 'SAVE_SCHEME'; name: string; data: SchemeData }
   | { type: 'SAVE_SETTINGS'; settings: PluginSettings }
-  | { type: 'SCAN_TEXTS'; mockupLayerNames: string[] }
   | { type: 'SCAN_ALL_TEXTS'; excludeLayerNames: string[] }
   | {
       type: 'BATCH_TRANSLATE'
@@ -84,7 +77,6 @@ export type UIMessage =
       bgImageHash?: string
       bgBytes?: number[]
       photoBytes?: number[]
-      mockupTranslations?: { code: string; texts: MockupTextNode[] }[]
       watermarkConfig?: WatermarkConfig
       // Pre-computed in UI (where Intl is available), keyed by country code
       watermarkTexts?: Record<string, { dateStr: string; weekdayStr: string }>
@@ -98,7 +90,6 @@ export type MainMessage =
   | { type: 'INDUSTRIES'; list: string[] }
   | { type: 'SCHEMES'; data: SchemesStore; lastScheme: string }
   | { type: 'SETTINGS'; settings: Partial<PluginSettings> }
-  | { type: 'COMPONENT_TEXTS'; texts: MockupTextNode[] }
   | { type: 'ALL_COMPONENT_TEXTS'; texts: { pathKey: string; content: string }[] }
   | { type: 'PROGRESS'; current: number; total: number }
   | { type: 'DONE'; warnings: string[] }

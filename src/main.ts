@@ -1,5 +1,5 @@
 // src/main.ts
-import { UIMessage, MainMessage, CountryConfig, SchemeData, SchemesStore, PluginSettings, DEFAULT_SETTINGS, COUNTRY_LANG_CODE, MockupTextNode, SAMPLE_ADDRESSES } from './types'
+import { UIMessage, MainMessage, CountryConfig, SchemeData, SchemesStore, PluginSettings, DEFAULT_SETTINGS, COUNTRY_LANG_CODE, SAMPLE_ADDRESSES } from './types'
 
 // ─── Utility: recursive node finder ──────────────────────────────
 function findNodeByName(root: BaseNode, name: string): BaseNode | null {
@@ -65,18 +65,6 @@ function findBgLibrary(): FrameNode | null {
   return null
 }
 
-// ─── Utility: collect all TEXT nodes recursively ─────────────────
-function collectTextNodes(node: BaseNode, pathKey: string, layerName: string, results: MockupTextNode[]) {
-  if (node.type === 'TEXT' && (node as TextNode).characters.trim()) {
-    results.push({ layerName, pathKey, content: (node as TextNode).characters })
-  }
-  if ('children' in node) {
-    for (const child of (node as ChildrenMixin).children) {
-      collectTextNodes(child, `${pathKey}|${child.name}`, layerName, results)
-    }
-  }
-}
-
 // ─── Utility: collect all TEXT nodes recursively (flat) ──────────
 function collectAllTextNodes(node: BaseNode, result: TextNode[]) {
   if (node.type === 'TEXT') { result.push(node as TextNode); return }
@@ -132,36 +120,6 @@ function findNodeByPathKey(root: BaseNode, pathKey: string): BaseNode | null {
     return null
   }
   return search(root, 0)
-}
-
-// ─── Handler: SCAN_TEXTS ─────────────────────────────────────────
-function handleScanTexts(mockupLayerNames: string[]) {
-  const component = resolveComponentFromSelection()
-  if (!component) {
-    figma.ui.postMessage({ type: 'ERROR', message: '请先选中 Main Component 再扫描' } as MainMessage)
-    return
-  }
-  const texts: MockupTextNode[] = []
-  const missing: string[] = []
-
-  for (const layerName of mockupLayerNames) {
-    const mockupLayer = findNodeByName(component, layerName)
-    if (!mockupLayer) {
-      missing.push(layerName)
-      continue
-    }
-    if ('children' in mockupLayer) {
-      for (const child of (mockupLayer as ChildrenMixin).children) {
-        collectTextNodes(child, child.name, layerName, texts)
-      }
-    }
-  }
-
-  if (missing.length > 0 && texts.length === 0) {
-    figma.ui.postMessage({ type: 'ERROR', message: `未找到图层: ${missing.join(', ')}` } as MainMessage)
-    return
-  }
-  figma.ui.postMessage({ type: 'COMPONENT_TEXTS', texts } as MainMessage)
 }
 
 // ─── Utility: set text with font fallback ────────────────────────
@@ -452,21 +410,6 @@ async function handleGenerate(msg: Extract<UIMessage, { type: 'GENERATE' }>) {
       }
     }
 
-    // Apply mockup text translations
-    if (msg.mockupTranslations) {
-      const countryTr = msg.mockupTranslations.find(t => t.code === config.code)
-      if (countryTr) {
-        for (const { layerName, pathKey, content } of countryTr.texts) {
-          const mockupNode = findNodeByName(instance, layerName)
-          if (mockupNode) {
-            const textNode = findNodeByPathKey(mockupNode, pathKey)
-            if (textNode?.type === 'TEXT') {
-              await setTextSafe(textNode as TextNode, content, warnings, `${config.code} mockup`)
-            }
-          }
-        }
-      }
-    }
 
     // Apply watermark
     if (msg.watermarkConfig) {
@@ -683,9 +626,6 @@ export default async function () {
       switch (raw.type) {
         case 'READ_HEADLINE_STYLE':
           handleReadHeadlineStyle()
-          break
-        case 'SCAN_TEXTS':
-          handleScanTexts(raw.mockupLayerNames)
           break
         case 'GET_INDUSTRIES':
           handleGetIndustries()
