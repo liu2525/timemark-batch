@@ -31,6 +31,7 @@ manifest.ui = 'build/ui.html'
 manifest.networkAccess = {
   allowedDomains: [
     'https://api.openai.com',
+    'https://generativelanguage.googleapis.com',
     'https://translate.googleapis.com',
     'https://api.mymemory.translated.net',
     'https://api-free.deepl.com',
@@ -39,4 +40,4 @@ manifest.networkAccess = {
   ]
 }
 writeFileSync('manifest.json', JSON.stringify(manifest, null, 2) + '\n')
-console.log('✓ Patched manifest.json → ui: "build/ui.html", networkAccess: openai')
+console.log('✓ Patched manifest.json → ui: "build/ui.html", networkAccess: openai + gemini')
