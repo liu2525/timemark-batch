@@ -108,7 +108,7 @@ function AIModal({ target, selectedIndustry, promptPresets, apiKey, geminiKey, o
         const trimmedKey = geminiKey.trim()
         if (!trimmedKey) { setError('请先在设置中填写 Gemini API Key'); setLoading(false); return }
         const aspectRatio = size === '1792x1024' ? '16:9' : size === '1024x1792' ? '9:16' : '1:1'
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${trimmedKey}`, {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${trimmedKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: abortRef.current.signal,
