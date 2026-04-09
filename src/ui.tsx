@@ -108,11 +108,11 @@ function AIModal({ target, selectedIndustry, promptPresets, apiKey, geminiKey, o
         const trimmedKey = geminiKey.trim()
         if (!trimmedKey) { setError('请先在设置中填写 Gemini API Key'); setLoading(false); return }
         const aspectRatio = size === '1792x1024' ? '16:9' : size === '1024x1792' ? '9:16' : '1:1'
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${trimmedKey}`, {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': trimmedKey },
           signal: abortRef.current.signal,
-          body: JSON.stringify({ instances: [{ prompt: finalPrompt }], parameters: { aspectRatio, sampleCount: 1, outputMimeType: 'image/jpeg' } }),
+          body: JSON.stringify({ instances: [{ prompt: finalPrompt }], parameters: { aspectRatio, sampleCount: 1 } }),
         })
         const json = await res.json()
         if (!res.ok) throw new Error(json.error?.message ?? `HTTP ${res.status}`)
@@ -156,7 +156,7 @@ function AIModal({ target, selectedIndustry, promptPresets, apiKey, geminiKey, o
           {/* Provider toggle */}
           <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
             <button style={tabStyle(imageProvider === 'openai')} onClick={() => setImageProvider('openai')}>OpenAI DALL-E 3</button>
-            <button style={tabStyle(imageProvider === 'gemini')} onClick={() => setImageProvider('gemini')}>Gemini Imagen 3</button>
+            <button style={tabStyle(imageProvider === 'gemini')} onClick={() => setImageProvider('gemini')}>Gemini Imagen 4</button>
           </div>
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
