@@ -1,1 +1,20 @@
-{"api":"1.0.0","editorType":["figma"],"id":"timemark-batch-plugin","name":"Timemark Batch","main":"build/main.js","ui":"build/ui.js","networkAccess":{"allowedDomains":["https://api.openai.com"]}}
+{
+  "api": "1.0.0",
+  "editorType": [
+    "figma"
+  ],
+  "id": "timemark-batch-plugin",
+  "name": "Timemark Batch",
+  "main": "build/main.js",
+  "ui": "build/ui.html",
+  "networkAccess": {
+    "allowedDomains": [
+      "https://api.openai.com",
+      "https://translate.googleapis.com",
+      "https://api.mymemory.translated.net",
+      "https://api-free.deepl.com",
+      "https://api.deepl.com",
+      "https://api.cognitive.microsofttranslator.com"
+    ]
+  }
+}

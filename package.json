@@ -24,9 +24,8 @@
     "main": "src/main.ts",
     "ui": "src/ui.tsx",
     "networkAccess": {
-      "allowedDomains": [
-        "https://api.openai.com"
-      ]
+      "allowedDomains": ["*"],
+      "reasoning": "Requires OpenAI API and dynamic DALL-E image download URLs"
     }
   }
 }
