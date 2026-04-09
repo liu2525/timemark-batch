@@ -107,23 +107,24 @@ function AIModal({ target, selectedIndustry, promptPresets, apiKey, geminiKey, o
       } else {
         const trimmedKey = geminiKey.trim()
         if (!trimmedKey) { setError('请先在设置中填写 Gemini API Key'); setLoading(false); return }
-        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent', {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${trimmedKey}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': trimmedKey },
+          headers: { 'Content-Type': 'application/json' },
           signal: abortRef.current.signal,
           body: JSON.stringify({
             contents: [{ parts: [{ text: finalPrompt }] }],
-            generationConfig: { responseModalities: ['IMAGE'] },
+            generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
           }),
         })
         const json = await res.json()
         if (!res.ok) throw new Error(json.error?.message ?? `HTTP ${res.status}`)
-        // Find the image part in the response
-        const parts: { inlineData?: { mimeType: string; data: string } }[] =
-          json.candidates?.[0]?.content?.parts ?? []
-        const imgPart = parts.find(p => p.inlineData?.data)
-        if (!imgPart?.inlineData) throw new Error('Gemini 未返回图片数据')
-        const binary = atob(imgPart.inlineData.data)
+        // Response uses snake_case: inline_data (not inlineData)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const parts: any[] = json.candidates?.[0]?.content?.parts ?? []
+        const imgPart = parts.find((p: any) => p.inline_data?.data || p.inlineData?.data)
+        const imgData = imgPart?.inline_data ?? imgPart?.inlineData
+        if (!imgData?.data) throw new Error('Gemini 未返回图片数据')
+        const binary = atob(imgData.data)
         const arr = new Uint8Array(binary.length)
         for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i)
         bytes = Array.from(arr)
@@ -162,7 +163,7 @@ function AIModal({ target, selectedIndustry, promptPresets, apiKey, geminiKey, o
           {/* Provider toggle */}
           <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
             <button style={tabStyle(imageProvider === 'openai')} onClick={() => setImageProvider('openai')}>OpenAI DALL-E 3</button>
-            <button style={tabStyle(imageProvider === 'gemini')} onClick={() => setImageProvider('gemini')}>Gemini 2.0 Flash</button>
+            <button style={tabStyle(imageProvider === 'gemini')} onClick={() => setImageProvider('gemini')}>Gemini 2.5 Flash</button>
           </div>
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
