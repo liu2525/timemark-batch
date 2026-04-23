@@ -935,7 +935,7 @@ function App() {
               <input style={S.input} value={c.subheadline} onInput={(e: Event) => updateCountry(i, { subheadline: (e.target as HTMLInputElement).value })} placeholder="副标题" />
               <input style={S.input} value={c.cta_text} onInput={(e: Event) => updateCountry(i, { cta_text: (e.target as HTMLInputElement).value })} placeholder="CTA" />
               <select style={S.select} value={c.watermark} onChange={(e: Event) => updateCountry(i, { watermark: (e.target as HTMLSelectElement).value })}>
-                {['en', 'jp', 'kr', 'de', 'fr', 'br', 'mx', 'id', 'vn', 'th', 'sa'].map(w => <option key={w} value={w}>{w}</option>)}
+                {['en', 'jp', 'kr', 'de', 'fr', 'br', 'mx', 'id', 'vn', 'th', 'sa', 'tw'].map(w => <option key={w} value={w}>{w}</option>)}
               </select>
             </div>
           ))}

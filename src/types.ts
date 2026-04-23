@@ -110,29 +110,30 @@ export const DEFAULT_COUNTRIES: CountryConfig[] = [
   { code: 'VN', flag: '🇻🇳', headline: '', subheadline: '', cta_text: '', watermark: 'vn', enabled: true },
   { code: 'TH', flag: '🇹🇭', headline: '', subheadline: '', cta_text: '', watermark: 'th', enabled: true },
   { code: 'SA', flag: '🇸🇦', headline: '', subheadline: '', cta_text: '', watermark: 'sa', enabled: true },
+  { code: 'TW', flag: '🇹🇼', headline: '', subheadline: '', cta_text: '', watermark: 'tw', enabled: true },
 ]
 
 // Google / MyMemory / Microsoft language codes
 export const LANG_MAP: Record<string, string> = {
   JP: 'ja', KR: 'ko', DE: 'de', FR: 'fr', BR: 'pt', MX: 'es',
-  ID: 'id', VN: 'vi', TH: 'th', SA: 'ar',
+  ID: 'id', VN: 'vi', TH: 'th', SA: 'ar', TW: 'zh-TW',
 }
 
 // Microsoft uses slightly different codes for some locales
 export const MS_LANG_MAP: Record<string, string> = {
   JP: 'ja', KR: 'ko', DE: 'de', FR: 'fr', BR: 'pt-BR', MX: 'es',
-  ID: 'id', VN: 'vi', TH: 'th', SA: 'ar',
+  ID: 'id', VN: 'vi', TH: 'th', SA: 'ar', TW: 'zh-Hant',
 }
 
 // DeepL target language codes (subset — VN/TH/SA unsupported, falls back to Google)
 export const DEEPL_LANG_MAP: Record<string, string> = {
-  JP: 'JA', KR: 'KO', DE: 'DE', FR: 'FR', BR: 'PT-BR', MX: 'ES', ID: 'ID',
+  JP: 'JA', KR: 'KO', DE: 'DE', FR: 'FR', BR: 'PT-BR', MX: 'ES', ID: 'ID', TW: 'ZH-HANT',
 }
 
 // Country code → display language code for file naming
 export const COUNTRY_LANG_CODE: Record<string, string> = {
   US: 'EN', JP: 'JA', KR: 'KO', DE: 'DE', FR: 'FR', BR: 'PT', MX: 'ES',
-  ID: 'ID', VN: 'VI', TH: 'TH', SA: 'AR',
+  ID: 'ID', VN: 'VI', TH: 'TH', SA: 'AR', TW: 'ZH-TW',
 }
 
 export interface WatermarkConfig {
@@ -146,7 +147,7 @@ export const DEFAULT_WATERMARK_CONFIG: WatermarkConfig = {
 // Intl locale codes per country
 export const LOCALE_MAP: Record<string, string> = {
   US: 'en-US', JP: 'ja-JP', KR: 'ko-KR', DE: 'de-DE', FR: 'fr-FR',
-  BR: 'pt-BR', MX: 'es-MX', ID: 'id-ID', VN: 'vi-VN', TH: 'th-TH', SA: 'ar-SA',
+  BR: 'pt-BR', MX: 'es-MX', ID: 'id-ID', VN: 'vi-VN', TH: 'th-TH', SA: 'ar-SA', TW: 'zh-TW',
 }
 
 // Random sample addresses per country
@@ -162,6 +163,7 @@ export const SAMPLE_ADDRESSES: Record<string, string[]> = {
   VN: ['72 Lê Thánh Tôn, Quận 1, TP.HCM', '54 Lý Thái Tổ, Hoàn Kiếm, Hà Nội', '25 Nguyễn Huệ, Quận 1, TP.HCM'],
   TH: ['87 Wireless Rd, Lumpini, Bangkok 10330', '150 Sukhumvit 11, Khlong Toei, Bangkok', '181 Silom Rd, Bang Rak, Bangkok 10500'],
   SA: ['طريق الملك فهد، العليا، الرياض 12214', 'شارع التحلية، الشرفية، جدة 23511', 'شارع الملك عبدالعزيز، الدمام 32241'],
+  TW: ['台北市信義區松高路1號', '台北市大安區忠孝東路四段181號', '台北市中山區南京東路二段96號'],
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
