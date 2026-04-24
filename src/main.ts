@@ -456,6 +456,10 @@ async function handleGenerate(msg: Extract<UIMessage, { type: 'GENERATE' }>) {
 }
 
 // ─── Utility: apply watermark to one instance ────────────────────
+// Returns the Set of node IDs that were actually written to, so the caller
+// can exclude them from the batch-translate loop even when they live outside
+// the watermark container (e.g. an address node that is a sibling of
+// the watermark component rather than a child of it).
 async function applyWatermark(
   instance: InstanceNode,
   config: CountryConfig,
@@ -465,86 +469,109 @@ async function applyWatermark(
   addr: string,
   weekdaySet: Set<string>,
   warnings: string[]
-) {
+): Promise<Set<string>> {
+  const handledIds = new Set<string>()
+
   // Case-insensitive lookup so 'watermark' matches 'Watermark', 'WATERMARK', etc.
   const wmNode = findNodeByNameCI(instance, watermarkLayerName.toLowerCase())
-  if (!wmNode) { warnings.push(`${config.code}: 未找到水印图层 "${watermarkLayerName}"`); return }
+  if (!wmNode) { warnings.push(`${config.code}: 未找到水印图层 "${watermarkLayerName}"`); return handledIds }
 
   const DATE_NAMES    = ['date', 'Date', 'DATE', '日期']
   const WEEKDAY_NAMES = ['weekday', 'Weekday', 'WEEKDAY', 'week', 'Week', 'day', 'Day', '星期']
   const ADDRESS_NAMES = ['address', 'Address', 'ADDRESS', '地址', 'addr', 'Addr']
 
+  // Helper: write text and record the node ID so it won't be overwritten by translation
+  async function write(tn: TextNode, text: string, label: string) {
+    await setTextSafe(tn, text, warnings, label)
+    handledIds.add(tn.id)
+  }
+
   let dateHandled = false, weekdayHandled = false, addressHandled = false
 
+  // ── Phase 1: name-based lookup inside the watermark container ────
   for (const n of DATE_NAMES) {
     const found = findNodeByName(wmNode, n)
     if (!found) continue
     const tn = findFirstTextNode(found)
-    if (tn && dateStr) { await setTextSafe(tn, dateStr, warnings, `${config.code} watermark/date`); dateHandled = true; break }
+    if (tn && dateStr) { await write(tn, dateStr, `${config.code} watermark/date`); dateHandled = true; break }
   }
   for (const n of WEEKDAY_NAMES) {
     const found = findNodeByName(wmNode, n)
     if (!found) continue
     const tn = findFirstTextNode(found)
-    if (tn && dayStr) { await setTextSafe(tn, dayStr, warnings, `${config.code} watermark/weekday`); weekdayHandled = true; break }
+    if (tn && dayStr) { await write(tn, dayStr, `${config.code} watermark/weekday`); weekdayHandled = true; break }
   }
   for (const n of ADDRESS_NAMES) {
     const found = findNodeByName(wmNode, n)
     if (!found) continue
     const tn = findFirstTextNode(found)
-    if (tn) { await setTextSafe(tn, addr, warnings, `${config.code} watermark/address`); addressHandled = true; break }
+    if (tn) { await write(tn, addr, `${config.code} watermark/address`); addressHandled = true; break }
   }
 
+  // ── Phase 2: name-pattern + content fallback inside watermark ────
   if (!dateHandled || !weekdayHandled || !addressHandled) {
     const allTexts: TextNode[] = []
     collectAllTextNodes(wmNode, allTexts)
 
-    // First pass: use layer NAME patterns to identify date/weekday nodes whose
-    // names look like a calendar date (e.g. "2021-12-23").  Content-based
-    // classification is unreliable here because two sibling nodes can share the
-    // same name while containing different kinds of text (one date, one weekday).
-    const dateNameRx    = /^\d{4}[-./]\d{1,2}[-./]\d{1,2}$/   // "2021-12-23"
-    const addressNameRx = /[\u4e00-\u9fff·・]/                  // CJK chars → likely an address
+    // Names that look like a calendar date (e.g. "2021-12-23")
+    const dateNameRx    = /^\d{4}[-./]\d{1,2}[-./]\d{1,2}$/
+    // Names that contain CJK characters (e.g. "成都市·天府五街站A口")
+    const addressNameRx = /[\u4e00-\u9fff·・]/
 
+    // Pass 2a: layer-name patterns
     for (const tn of allTexts) {
+      if (handledIds.has(tn.id)) continue
       const nodeName = tn.name.trim()
-      // A node whose NAME is itself a date string is either the date or the weekday
-      // node — distinguish them by their current text content.
       if (dateNameRx.test(nodeName)) {
-        // Use content to split date vs weekday
         const kind = classifyWatermarkText(tn.characters, weekdaySet)
         if (kind === 'weekday' && !weekdayHandled && dayStr) {
-          await setTextSafe(tn, dayStr, warnings, `${config.code} watermark/weekday`); weekdayHandled = true
+          await write(tn, dayStr, `${config.code} watermark/weekday`); weekdayHandled = true
         } else if (!dateHandled && dateStr) {
-          // Default: treat as date (also catches 'date' classification)
-          await setTextSafe(tn, dateStr, warnings, `${config.code} watermark/date`); dateHandled = true
+          await write(tn, dateStr, `${config.code} watermark/date`); dateHandled = true
         }
         continue
       }
-      // A node whose NAME contains CJK characters is likely the address
       if (addressNameRx.test(nodeName) && !addressHandled) {
-        await setTextSafe(tn, addr, warnings, `${config.code} watermark/address`); addressHandled = true
+        await write(tn, addr, `${config.code} watermark/address`); addressHandled = true
         continue
       }
     }
 
-    // Second pass: for any nodes not yet matched by name pattern, fall back to
-    // content-based classification.
+    // Pass 2b: content-based classification for remaining nodes
     if (!dateHandled || !weekdayHandled || !addressHandled) {
       for (const tn of allTexts) {
+        if (handledIds.has(tn.id)) continue
         const nodeName = tn.name.trim()
-        // Skip nodes already handled by name-pattern pass
-        if (dateNameRx.test(nodeName)) continue
-        if (addressNameRx.test(nodeName)) continue
+        if (dateNameRx.test(nodeName) || addressNameRx.test(nodeName)) continue  // already tried above
 
         const kind = classifyWatermarkText(tn.characters, weekdaySet)
         if (kind === 'weekday' && !weekdayHandled && dayStr) {
-          await setTextSafe(tn, dayStr, warnings, `${config.code} watermark/weekday`); weekdayHandled = true
+          await write(tn, dayStr, `${config.code} watermark/weekday`); weekdayHandled = true
         } else if (kind === 'date' && !dateHandled && dateStr) {
-          await setTextSafe(tn, dateStr, warnings, `${config.code} watermark/date`); dateHandled = true
+          await write(tn, dateStr, `${config.code} watermark/date`); dateHandled = true
         } else if (kind === 'address' && !addressHandled) {
-          await setTextSafe(tn, addr, warnings, `${config.code} watermark/address`); addressHandled = true
+          await write(tn, addr, `${config.code} watermark/address`); addressHandled = true
         }
+      }
+    }
+  }
+
+  // ── Phase 3: instance-level fallback for address ─────────────────
+  // The address text node may sit OUTSIDE the watermark container
+  // (e.g. as a sibling of the watermark component).  We search the whole
+  // instance for the first text node whose layer NAME looks like an address
+  // (CJK characters, or a standard address layer name).
+  if (!addressHandled) {
+    const addressNameRx = /[\u4e00-\u9fff·・]/
+    const instTexts: TextNode[] = []
+    collectAllTextNodes(instance, instTexts)
+    for (const tn of instTexts) {
+      if (handledIds.has(tn.id)) continue   // skip already-handled nodes
+      const nodeName = tn.name.trim()
+      if (ADDRESS_NAMES.includes(nodeName) || addressNameRx.test(nodeName)) {
+        await write(tn, addr, `${config.code} watermark/address (outside wm)`)
+        addressHandled = true
+        break
       }
     }
   }
@@ -552,6 +579,8 @@ async function applyWatermark(
   if (!dateHandled)    warnings.push(`${config.code}: 水印中未识别到日期节点`)
   if (!weekdayHandled) warnings.push(`${config.code}: 水印中未识别到星期节点`)
   if (!addressHandled) warnings.push(`${config.code}: 水印中未识别到地址节点`)
+
+  return handledIds
 }
 
 // ─── Handler: SCAN_ALL_TEXTS ──────────────────────────────────────
@@ -624,28 +653,37 @@ async function handleBatchTranslate(msg: Extract<UIMessage, { type: 'BATCH_TRANS
       : null
     const wmActualName = wmActualNode?.name  // e.g. "Watermark" (with capital W)
 
+    // applyWatermark returns the IDs of every node it wrote to — including nodes
+    // that live OUTSIDE the watermark container (e.g. the address node that is a
+    // sibling of the watermark component).  We use those IDs below to ensure the
+    // translation loop never overwrites values that applyWatermark already set.
+    let handledWmIds = new Set<string>()
     if (msg.watermarkConfig && wmActualName) {
       const wt = msg.watermarkTexts?.[config.code]
       const weekdaySet = new Set<string>(msg.weekdayNames ?? [])
       const pool = SAMPLE_ADDRESSES[config.code] ?? SAMPLE_ADDRESSES['US']
-      await applyWatermark(
+      handledWmIds = await applyWatermark(
         instance, config,
-        wmActualName,   // pass the real layer name so findNodeByNameCI inside applyWatermark always matches
+        wmActualName,
         wt?.dateStr ?? '', wt?.weekdayStr ?? '',
         pool[Math.floor(Math.random() * pool.length)],
         weekdaySet, warnings
       )
     }
 
-    // Apply translated texts, skipping any node already handled by the watermark step.
-    // Watermark nodes are identified by their pathKey starting with the watermark layer's
-    // actual name (which may differ in capitalisation from the config value).
+    // Apply translated texts, skipping nodes already handled by the watermark step.
+    // Two guard conditions:
+    //   (a) pathKey prefix — catches nodes inside the watermark layer by path
+    //   (b) node ID in handledWmIds — catches nodes OUTSIDE the watermark layer
+    //       that applyWatermark still wrote to (e.g. address sibling node)
     const countryTr = msg.translations.find(t => t.code === config.code)
     if (countryTr) {
       for (const { pathKey, content } of countryTr.texts) {
-        // Skip nodes inside the watermark layer — already set with Intl-formatted values above
+        // Guard (a): skip nodes inside the watermark layer by pathKey prefix
         if (wmActualName && (pathKey === wmActualName || pathKey.startsWith(wmActualName + '|'))) continue
         const node = findNodeByPathKey(instance, pathKey)
+        // Guard (b): skip nodes written to by applyWatermark even if outside watermark path
+        if (node && handledWmIds.has((node as SceneNode).id)) continue
         if (node?.type === 'TEXT') {
           await setTextSafe(node as TextNode, content, warnings, `${config.code} ${pathKey}`, true)
           // Re-apply headline fills (setTextSafe resets ALL character-level styling)
