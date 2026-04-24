@@ -483,14 +483,53 @@ async function applyWatermark(
   if (!dateHandled || !weekdayHandled || !addressHandled) {
     const allTexts: TextNode[] = []
     collectAllTextNodes(wmNode, allTexts)
+
+    // First pass: use layer NAME patterns to identify date/weekday nodes whose
+    // names look like a calendar date (e.g. "2021-12-23").  Content-based
+    // classification is unreliable here because two sibling nodes can share the
+    // same name while containing different kinds of text (one date, one weekday).
+    const dateNameRx    = /^\d{4}[-./]\d{1,2}[-./]\d{1,2}$/   // "2021-12-23"
+    const addressNameRx = /[\u4e00-\u9fff·・]/                  // CJK chars → likely an address
+
     for (const tn of allTexts) {
-      const kind = classifyWatermarkText(tn.characters, weekdaySet)
-      if (kind === 'weekday' && !weekdayHandled && dayStr) {
-        await setTextSafe(tn, dayStr, warnings, `${config.code} watermark/weekday`); weekdayHandled = true
-      } else if (kind === 'date' && !dateHandled && dateStr) {
-        await setTextSafe(tn, dateStr, warnings, `${config.code} watermark/date`); dateHandled = true
-      } else if (kind === 'address' && !addressHandled) {
+      const nodeName = tn.name.trim()
+      // A node whose NAME is itself a date string is either the date or the weekday
+      // node — distinguish them by their current text content.
+      if (dateNameRx.test(nodeName)) {
+        // Use content to split date vs weekday
+        const kind = classifyWatermarkText(tn.characters, weekdaySet)
+        if (kind === 'weekday' && !weekdayHandled && dayStr) {
+          await setTextSafe(tn, dayStr, warnings, `${config.code} watermark/weekday`); weekdayHandled = true
+        } else if (!dateHandled && dateStr) {
+          // Default: treat as date (also catches 'date' classification)
+          await setTextSafe(tn, dateStr, warnings, `${config.code} watermark/date`); dateHandled = true
+        }
+        continue
+      }
+      // A node whose NAME contains CJK characters is likely the address
+      if (addressNameRx.test(nodeName) && !addressHandled) {
         await setTextSafe(tn, addr, warnings, `${config.code} watermark/address`); addressHandled = true
+        continue
+      }
+    }
+
+    // Second pass: for any nodes not yet matched by name pattern, fall back to
+    // content-based classification.
+    if (!dateHandled || !weekdayHandled || !addressHandled) {
+      for (const tn of allTexts) {
+        const nodeName = tn.name.trim()
+        // Skip nodes already handled by name-pattern pass
+        if (dateNameRx.test(nodeName)) continue
+        if (addressNameRx.test(nodeName)) continue
+
+        const kind = classifyWatermarkText(tn.characters, weekdaySet)
+        if (kind === 'weekday' && !weekdayHandled && dayStr) {
+          await setTextSafe(tn, dayStr, warnings, `${config.code} watermark/weekday`); weekdayHandled = true
+        } else if (kind === 'date' && !dateHandled && dateStr) {
+          await setTextSafe(tn, dateStr, warnings, `${config.code} watermark/date`); dateHandled = true
+        } else if (kind === 'address' && !addressHandled) {
+          await setTextSafe(tn, addr, warnings, `${config.code} watermark/address`); addressHandled = true
+        }
       }
     }
   }
@@ -557,10 +596,30 @@ async function handleBatchTranslate(msg: Extract<UIMessage, { type: 'BATCH_TRANS
     const suffix = msg.nameSuffix?.trim() || 'Msg'
     instance.name = `${langCode}-${dim}-${suffix}`
 
-    // Apply translated texts
+    // Apply watermark FIRST — the instance still holds the original component text at this
+    // point, so classifyWatermarkText can correctly identify date / weekday / address nodes
+    // by content.  If we did this after translations the original text would already be gone.
+    const wmLayerName = msg.watermarkConfig?.watermarkLayerName
+    if (msg.watermarkConfig && wmLayerName) {
+      const wt = msg.watermarkTexts?.[config.code]
+      const weekdaySet = new Set<string>(msg.weekdayNames ?? [])
+      const pool = SAMPLE_ADDRESSES[config.code] ?? SAMPLE_ADDRESSES['US']
+      await applyWatermark(
+        instance, config,
+        wmLayerName,
+        wt?.dateStr ?? '', wt?.weekdayStr ?? '',
+        pool[Math.floor(Math.random() * pool.length)],
+        weekdaySet, warnings
+      )
+    }
+
+    // Apply translated texts, skipping any node already handled by the watermark step.
+    // Watermark nodes are identified by their pathKey starting with the watermark layer name.
     const countryTr = msg.translations.find(t => t.code === config.code)
     if (countryTr) {
       for (const { pathKey, content } of countryTr.texts) {
+        // Skip nodes inside the watermark layer — already set with Intl-formatted values above
+        if (wmLayerName && (pathKey === wmLayerName || pathKey.startsWith(wmLayerName + '|'))) continue
         const node = findNodeByPathKey(instance, pathKey)
         if (node?.type === 'TEXT') {
           await setTextSafe(node as TextNode, content, warnings, `${config.code} ${pathKey}`, true)
@@ -586,20 +645,6 @@ async function handleBatchTranslate(msg: Extract<UIMessage, { type: 'BATCH_TRANS
           }
         }
       }
-    }
-
-    // Apply watermark (overrides date/weekday/address that were already set via pathKey above)
-    if (msg.watermarkConfig) {
-      const wt = msg.watermarkTexts?.[config.code]
-      const weekdaySet = new Set<string>(msg.weekdayNames ?? [])
-      const pool = SAMPLE_ADDRESSES[config.code] ?? SAMPLE_ADDRESSES['US']
-      await applyWatermark(
-        instance, config,
-        msg.watermarkConfig.watermarkLayerName,
-        wt?.dateStr ?? '', wt?.weekdayStr ?? '',
-        pool[Math.floor(Math.random() * pool.length)],
-        weekdaySet, warnings
-      )
     }
 
     instances.push(instance)
