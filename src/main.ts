@@ -1,12 +1,26 @@
 // src/main.ts
 import { UIMessage, MainMessage, CountryConfig, SchemeData, SchemesStore, PluginSettings, DEFAULT_SETTINGS, COUNTRY_LANG_CODE, SAMPLE_ADDRESSES } from './types'
 
-// ─── Utility: recursive node finder ──────────────────────────────
+// ─── Utility: recursive node finder (exact name) ─────────────────
 function findNodeByName(root: BaseNode, name: string): BaseNode | null {
   if (root.name === name) return root
   if ('children' in root) {
     for (const child of root.children) {
       const found = findNodeByName(child, name)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+// ─── Utility: recursive node finder (case-insensitive name) ──────
+// Used to locate the watermark container whose name may be 'watermark'
+// or 'Watermark' depending on the designer's convention.
+function findNodeByNameCI(root: BaseNode, nameLower: string): BaseNode | null {
+  if (root.name.toLowerCase() === nameLower) return root
+  if ('children' in root) {
+    for (const child of (root as ChildrenMixin).children) {
+      const found = findNodeByNameCI(child, nameLower)
       if (found) return found
     }
   }
@@ -452,7 +466,8 @@ async function applyWatermark(
   weekdaySet: Set<string>,
   warnings: string[]
 ) {
-  const wmNode = findNodeByName(instance, watermarkLayerName)
+  // Case-insensitive lookup so 'watermark' matches 'Watermark', 'WATERMARK', etc.
+  const wmNode = findNodeByNameCI(instance, watermarkLayerName.toLowerCase())
   if (!wmNode) { warnings.push(`${config.code}: 未找到水印图层 "${watermarkLayerName}"`); return }
 
   const DATE_NAMES    = ['date', 'Date', 'DATE', '日期']
@@ -599,14 +614,23 @@ async function handleBatchTranslate(msg: Extract<UIMessage, { type: 'BATCH_TRANS
     // Apply watermark FIRST — the instance still holds the original component text at this
     // point, so classifyWatermarkText can correctly identify date / weekday / address nodes
     // by content.  If we did this after translations the original text would already be gone.
-    const wmLayerName = msg.watermarkConfig?.watermarkLayerName
-    if (msg.watermarkConfig && wmLayerName) {
+    //
+    // We look up the watermark node case-insensitively so that a layer named "Watermark"
+    // is found even when the config value is "watermark" (and vice versa).  We then use
+    // the node's ACTUAL name as the pathKey prefix for the skip condition below.
+    const wmConfigName = msg.watermarkConfig?.watermarkLayerName
+    const wmActualNode = wmConfigName
+      ? findNodeByNameCI(instance, wmConfigName.toLowerCase())
+      : null
+    const wmActualName = wmActualNode?.name  // e.g. "Watermark" (with capital W)
+
+    if (msg.watermarkConfig && wmActualName) {
       const wt = msg.watermarkTexts?.[config.code]
       const weekdaySet = new Set<string>(msg.weekdayNames ?? [])
       const pool = SAMPLE_ADDRESSES[config.code] ?? SAMPLE_ADDRESSES['US']
       await applyWatermark(
         instance, config,
-        wmLayerName,
+        wmActualName,   // pass the real layer name so findNodeByNameCI inside applyWatermark always matches
         wt?.dateStr ?? '', wt?.weekdayStr ?? '',
         pool[Math.floor(Math.random() * pool.length)],
         weekdaySet, warnings
@@ -614,12 +638,13 @@ async function handleBatchTranslate(msg: Extract<UIMessage, { type: 'BATCH_TRANS
     }
 
     // Apply translated texts, skipping any node already handled by the watermark step.
-    // Watermark nodes are identified by their pathKey starting with the watermark layer name.
+    // Watermark nodes are identified by their pathKey starting with the watermark layer's
+    // actual name (which may differ in capitalisation from the config value).
     const countryTr = msg.translations.find(t => t.code === config.code)
     if (countryTr) {
       for (const { pathKey, content } of countryTr.texts) {
         // Skip nodes inside the watermark layer — already set with Intl-formatted values above
-        if (wmLayerName && (pathKey === wmLayerName || pathKey.startsWith(wmLayerName + '|'))) continue
+        if (wmActualName && (pathKey === wmActualName || pathKey.startsWith(wmActualName + '|'))) continue
         const node = findNodeByPathKey(instance, pathKey)
         if (node?.type === 'TEXT') {
           await setTextSafe(node as TextNode, content, warnings, `${config.code} ${pathKey}`, true)
