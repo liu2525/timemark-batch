@@ -596,15 +596,17 @@ function App() {
 
   async function translateOneText(text: string, code: string): Promise<string> {
     if (!text.trim()) return ''
+    // sl=auto: Google auto-detects source language
     async function gtGoogle(t: string, lang: string): Promise<string> {
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${lang}&dt=t&q=${encodeURIComponent(t)}`
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(t)}`
       const res = await fetch(url)
       const data = await res.json()
       return (data[0] as [string][]).map((c: [string]) => c[0]).join('')
     }
     if (translateProvider === 'google') return gtGoogle(text, LANG_MAP[code] ?? 'en')
     if (translateProvider === 'mymemory') {
-      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${LANG_MAP[code] ?? 'en'}`)
+      // autodetect: MyMemory auto-detects source language
+      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=autodetect|${LANG_MAP[code] ?? 'en'}`)
       const data = await res.json()
       if (data.responseStatus !== 200) throw new Error(data.responseDetails ?? 'MyMemory error')
       return data.responseData.translatedText
@@ -616,7 +618,8 @@ function App() {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Authorization': `DeepL-Auth-Key ${settings.deeplKey.trim()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: [text], source_lang: 'EN', target_lang: dlLang }),
+        // Omit source_lang: DeepL auto-detects when not specified
+        body: JSON.stringify({ text: [text], target_lang: dlLang }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message ?? `HTTP ${res.status}`)
@@ -626,7 +629,8 @@ function App() {
       const lang = MS_LANG_MAP[code] ?? LANG_MAP[code] ?? 'en'
       const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Ocp-Apim-Subscription-Key': settings.msTranslatorKey.trim() }
       if (settings.msTranslatorRegion.trim()) headers['Ocp-Apim-Subscription-Region'] = settings.msTranslatorRegion.trim()
-      const res = await fetch(`https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=en&to=${lang}`, {
+      // Omit from=: Microsoft auto-detects source language when not specified
+      const res = await fetch(`https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=${lang}`, {
         method: 'POST', headers, body: JSON.stringify([{ Text: text }]),
       })
       const data = await res.json()
