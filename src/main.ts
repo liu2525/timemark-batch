@@ -155,6 +155,7 @@ async function setTextSafe(
         const heightOver = node.height > originalH
         const widthOver  = autoResize === 'WIDTH_AND_HEIGHT' && node.width > originalW
 
+        let didShrink = false
         if (isAuto && (heightOver || widthOver)) {
           let lo = 6, hi = currentFontSize, bestFit = 6
           for (let i = 0; i < 20; i++) {
@@ -167,13 +168,15 @@ async function setTextSafe(
             if (hi - lo < 0.2) break
           }
           node.fontSize = bestFit
+          didShrink = true
           if (bestFit < currentFontSize * 0.6) {
             warnings.push(`${label}: 字号压缩至 ${bestFit.toFixed(1)}pt（原 ${currentFontSize.toFixed(1)}pt）`)
           }
         }
 
-        // For HEIGHT mode: lock box to original size so it doesn't re-expand
-        if (autoResize === 'HEIGHT') {
+        // Only lock to NONE when we actually shrank the font — if text fits
+        // naturally, keep the original auto-resize so the node stays editable.
+        if (autoResize === 'HEIGHT' && didShrink) {
           try { node.textAutoResize = 'NONE'; node.resize(originalW, originalH) } catch { /* ignore */ }
         }
       }
